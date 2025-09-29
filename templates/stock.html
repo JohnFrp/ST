@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Header Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h1 class="h3 fw-bold text-dark mb-1"><i class="fas fa-boxes text-primary me-2"></i>Stock Inventory</h1>
+                <p class="text-muted mb-0">Manage and track your pharmaceutical inventory</p>
+            </div>
+            <a href="{{ url_for('upload_file') }}" class="btn btn-primary-modern btn-modern">
+                <i class="fas fa-file-import me-2"></i>Import Stock
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card dashboard-card card-gradient-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-white-50 mb-2">Total Items</h6>
+                        <h2 class="fw-bold mb-0">{{ total_items }}</h2>
+                    </div>
+                    <div>
+                        <i class="fas fa-cubes fa-2x text-white-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card dashboard-card card-gradient-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-white-50 mb-2">Total Value</h6>
+                        <h2 class="fw-bold mb-0">{{ "{:,.0f}".format(total_value) }}</h2>
+                    </div>
+                   
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card dashboard-card card-gradient-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-white-50 mb-2">Profit Potential</h6>
+                        <h2 class="fw-bold mb-0">{{ "{:,.0f}".format(total_profit_potential) }}</h2>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card dashboard-card card-gradient-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-white-50 mb-2">Products</h6>
+                        <h2 class="fw-bold mb-0">{{ stocks|length }}</h2>
+                    </div>
+                    <div>
+                        <i class="fas fa-pills fa-2x text-white-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card filter-card mb-4">
+    <div class="card-body">
+        <h5 class="card-title mb-3"><i class="fas fa-filter text-primary me-2"></i>Filters & Search</h5>
+        <form method="GET" class="row g-3">
+            <div class="col-lg-5 col-md-6">
+                <label for="search" class="form-label fw-semibold">Search Products</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light border-end-0">
+                        <i class="fas fa-search text-muted"></i>
+                    </span>
+                    <input type="text" class="form-control search-box border-start-0" id="search" name="search" 
+                           value="{{ request.args.get('search', '') }}" placeholder="Search by name, generic name, or manufacturer...">
+                </div>
+            </div>
+            <div class="col-lg-4 col-md-6">
+                <label for="category" class="form-label fw-semibold">Category</label>
+                <select class="form-select search-box" id="category" name="category">
+                    <option value="">All Categories</option>
+                    {% for category in categories %}
+                    <option value="{{ category }}" 
+                            {% if request.args.get('category') == category %}selected{% endif %}>
+                        {{ category }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-lg-3 col-md-12 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary-modern btn-modern w-100 me-2">
+                    <i class="fas fa-filter me-2"></i>Apply
+                </button>
+                <a href="{{ url_for('show_stock') }}" class="btn btn-outline-secondary btn-modern w-100">
+                    <i class="fas fa-redo me-2"></i>Clear
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Stock Table -->
+<div class="card filter-card">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="card-title mb-0"><i class="fas fa-table text-primary me-2"></i>Stock Items</h5>
+            <span class="badge bg-primary badge-modern">{{ stocks|length }} items</span>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-modern">
+                <thead>
+                    <tr>
+                        <th><i class="fas fa-tag me-2"></i>Product Name</th>
+                        <th><i class="fas fa-prescription me-2"></i>Generic Name</th>
+                        <th><i class="fas fa-tags me-2"></i>Category</th>
+                        <th><i class="fas fa-shopping-cart me-2"></i>Buy Price</th>
+                        <th><i class="fas fa-tag me-2"></i>Sell Price</th>
+                        <th><i class="fas fa-chart-bar me-2"></i>Profit/Unit</th>
+                        <th><i class="fas fa-boxes me-2"></i>Stock Qty</th>
+                        <th><i class="fas fa-dollar-sign me-2"></i>Total Value</th>
+                        <th><i class="fas fa-calendar-alt me-2"></i>Expiry Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stock in stocks %}
+                    {% set days_left = (stock.expiry_date - now.date()).days if stock.expiry_date else None %}
+                    <tr class="{% if stock.stock_quantity < 10 %}stock-low{% elif days_left and days_left < 30 %}stock-expiring{% endif %}">
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="bg-primary bg-opacity-10 p-2 rounded me-3">
+                                    <i class="fas fa-pill text-primary"></i>
+                                </div>
+                                <div>
+                                    <strong class="d-block">{{ stock.name }}</strong>
+                                    <small class="text-muted"></small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="fw-semibold">{{ stock.generic_name or '-' }}</span>
+                        </td>
+                        <td>
+                            {% if stock.category %}
+                            <span class="badge bg-primary badge-modern">{{ stock.category[:30] }}{% if stock.category|length > 30 %}...{% endif %}</span>
+                            {% else %}
+                            <span class="badge bg-secondary badge-modern">Uncategorized</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="fw-bold text-success">{{ "{:,.0f}".format(stock.buy_price) }}</span>
+                        </td>
+                        <td>
+                            <span class="fw-bold text-primary">{{ "{:,.0f}".format(stock.sell_price) }}</span>
+                        </td>
+                        <td>
+                            {% set profit = stock.sell_price - stock.buy_price %}
+                            <span class="badge {% if profit > 0 %}bg-success{% else %}bg-danger{% endif %} badge-modern">
+                                {{ "{:,.0f}".format(profit) }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge {% if stock.stock_quantity < 10 %}bg-danger{% elif stock.stock_quantity < 20 %}bg-warning{% else %}bg-success{% endif %} badge-modern">
+                                {{ stock.stock_quantity }}
+                                {% if stock.stock_quantity < 10 %}
+                                <i class="fas fa-exclamation-circle ms-1"></i>
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <strong class="text-dark">{{ "{:,.0f}".format(stock.sell_price * stock.stock_quantity) }}</strong>
+                        </td>
+                        <td>
+                            {% if stock.expiry_date %}
+                                {% set days_left = (stock.expiry_date - now.date()).days %}
+                                <span class="badge {% if days_left < 0 %}bg-dark{% elif days_left < 30 %}bg-danger{% elif days_left < 90 %}bg-warning{% else %}bg-success{% endif %} badge-modern">
+                                    {{ stock.expiry_date.strftime('%Y-%m-%d') }}
+                                    {% if days_left < 90 %}
+                                    <br><small>{{ days_left }} days</small>
+                                    {% endif %}
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary badge-modern">No expiry</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9">
+                            <div class="empty-state">
+                                <i class="fas fa-inbox"></i>
+                                <h4 class="mt-3 mb-2">No Stock Items Found</h4>
+                                <p class="text-muted mb-3">Get started by importing your first Excel file</p>
+                                <a href="{{ url_for('upload_file') }}" class="btn btn-primary-modern btn-modern">
+                                    <i class="fas fa-file-import me-2"></i>Import Excel File
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add animation to table rows
+        const tableRows = document.querySelectorAll('.table-modern tbody tr');
+        tableRows.forEach((row, index) => {
+            row.style.animationDelay = `{index * 0.05}s`;
+            row.classList.add('animate__animated', 'animate__fadeInUp');
+        });
+
+        // Update expiry badges with real-time calculation
+        const now = new Date();
+        document.querySelectorAll('tbody tr').forEach(row => {
+            const expiryBadge = row.querySelector('td:last-child .badge');
+            if (expiryBadge && !expiryBadge.textContent.includes('No expiry')) {
+                const expiryText = expiryBadge.textContent.split('\n')[0].trim();
+                const expiryDate = new Date(expiryText);
+                const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+                
+                if (daysLeft < 0) {
+                    expiryBadge.className = 'badge bg-dark badge-modern';
+                    expiryBadge.innerHTML = 'Expired<br><small>' + Math.abs(daysLeft) + ' days ago</small>';
+                } else if (daysLeft < 30) {
+                    expiryBadge.className = 'badge bg-danger badge-modern';
+                    expiryBadge.innerHTML = expiryText + '<br><small>' + daysLeft + ' days left</small>';
+                } else if (daysLeft < 90) {
+                    expiryBadge.className = 'badge bg-warning badge-modern';
+                    expiryBadge.innerHTML = expiryText + '<br><small>' + daysLeft + ' days left</small>';
+                }
+            }
+        });
+
+        // Add hover effects
+        const cards = document.querySelectorAll('.dashboard-card');
+        cards.forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                card.style.transform = 'translateY(-5px)';
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = 'translateY(0)';
+            });
+        });
+    });
+</script>
+{% endblock %}

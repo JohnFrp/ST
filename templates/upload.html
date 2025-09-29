@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Header Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h1 class="h3 fw-bold text-dark mb-1"><i class="fas fa-file-excel text-primary me-2"></i>Import Stock Data</h1>
+                <p class="text-muted mb-0">Upload Excel files to manage your inventory</p>
+            </div>
+            <a href="{{ url_for('show_stock') }}" class="btn btn-outline-secondary btn-modern">
+                <i class="fas fa-arrow-left me-2"></i>Back to Stock
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <!-- Upload Card -->
+        <div class="card filter-card mb-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-4">
+                    <div class="bg-primary bg-opacity-10 p-3 rounded me-3">
+                        <i class="fas fa-file-excel fa-2x text-primary"></i>
+                    </div>
+                    <div>
+                        <h4 class="card-title mb-1">Import Excel File</h4>
+                        <p class="text-muted mb-0">Upload your stock data in Excel format</p>
+                    </div>
+                </div>
+                
+                <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                    <div class="mb-4">
+                        <label for="file" class="form-label fw-semibold">Select Excel File</label>
+                        <div class="file-upload-area border-dashed rounded-3 p-5 text-center position-relative">
+                            <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                            <h5 class="mb-2">Drag & Drop your file here</h5>
+                            <p class="text-muted mb-3">or click to browse</p>
+                            <input type="file" class="form-control position-absolute top-0 start-0 w-100 h-100 opacity-0 cursor-pointer" 
+                                   id="file" name="file" accept=".xlsx,.xls" required>
+                            <div class="mt-2">
+                                <small class="text-muted" id="fileName">No file chosen</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <h6 class="alert-heading mb-2"><i class="fas fa-info-circle me-2"></i>File Requirements</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong class="text-primary">Required Columns:</strong>
+                                <ul class="mb-0 mt-2">
+                                    <li>name</li>
+                                    <li>buy_price</li>
+                                    <li>sell_price</li>
+                                    <li>stock_quantity</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <strong class="text-primary">Optional Columns:</strong>
+                                <ul class="mb-0 mt-2">
+                                    <li>generic_name</li>
+                                    <li>category</li>
+                                    <li>expiry_date</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('show_stock') }}" class="btn btn-outline-secondary btn-modern me-md-2">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary-modern btn-modern">
+                            <i class="fas fa-upload me-2"></i>Upload and Import
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Example Format Card -->
+        <div class="card filter-card mb-4">
+            <div class="card-body">
+                <h5 class="card-title mb-4">
+                    <i class="fas fa-table text-primary me-2"></i>Excel File Format Example
+                </h5>
+                
+                <div class="table-responsive">
+                    <table class="table table-modern">
+                        <thead>
+                            <tr>
+                                <th class="bg-primary text-white">Name</th>
+                                <th class="bg-primary text-white">Generic Name</th>
+                                <th class="bg-primary text-white">Category</th>
+                                <th class="bg-primary text-white">Buy Price</th>
+                                <th class="bg-primary text-white">Sell Price</th>
+                                <th class="bg-primary text-white">Stock Qty</th>
+                                <th class="bg-primary text-white">Expiry Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Paracetamol</strong></td>
+                                <td>Acetaminophen</td>
+                                <td><span class="badge bg-primary badge-modern">Medicine</span></td>
+                                <td class="text-success">100</td>
+                                <td class="text-primary">200</td>
+                                <td><span class="badge bg-success badge-modern">100</span></td>
+                                <td><span class="badge bg-success badge-modern">2024-12-31</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Vitamin C</strong></td>
+                                <td>Ascorbic Acid</td>
+                                <td><span class="badge bg-info badge-modern">Supplements</span></td>
+                                <td class="text-success">500</td>
+                                <td class="text-primary">600</td>
+                                <td><span class="badge bg-success badge-modern">50</span></td>
+                                <td><span class="badge bg-warning badge-modern">2024-10-15</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Bandage</strong></td>
+                                <td>-</td>
+                                <td><span class="badge bg-warning badge-modern">First Aid</span></td>
+                                <td class="text-success">300</td>
+                                <td class="text-primary">400</td>
+                                <td><span class="badge bg-success badge-modern">200</span></td>
+                                <td><span class="badge bg-success badge-modern">2025-06-30</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="mt-4">
+                    <div class="alert alert-light border">
+                        <h6 class="alert-heading mb-2"><i class="fas fa-lightbulb me-2 text-warning"></i>Pro Tips</h6>
+                        <ul class="mb-0">
+                            <li>Ensure dates are in <code>YYYY-MM-DD</code> format</li>
+                            <li>Use numeric values for price and quantity columns</li>
+                            <li>File should have a header row with column names</li>
+                            <li>Supported formats: .xlsx, .xls</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Danger Zone Card -->
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Danger Zone</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-3">
+                    <div class="bg-danger bg-opacity-10 p-3 rounded me-3">
+                        <i class="fas fa-trash fa-2x text-danger"></i>
+                    </div>
+                    <div>
+                        <h6 class="mb-1">Clear All Stock Data</h6>
+                        <p class="text-muted mb-0">This will permanently remove all stock items from the database</p>
+                    </div>
+                </div>
+                
+                <form action="{{ url_for('clear_stock') }}" method="POST" id="clearForm">
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-danger btn-modern" onclick="return confirmClear()">
+                            <i class="fas fa-trash me-2"></i>Clear All Stock Data
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // File input handling
+        const fileInput = document.getElementById('file');
+        const fileName = document.getElementById('fileName');
+        const uploadArea = document.querySelector('.file-upload-area');
+        
+        fileInput.addEventListener('change', function(e) {
+            if (this.files.length > 0) {
+                fileName.textContent = this.files[0].name;
+                uploadArea.classList.add('border-primary', 'bg-primary bg-opacity-5');
+            } else {
+                fileName.textContent = 'No file chosen';
+                uploadArea.classList.remove('border-primary', 'bg-primary bg-opacity-5');
+            }
+        });
+        
+        // Drag and drop functionality
+        uploadArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.classList.add('border-primary', 'bg-primary bg-opacity-5');
+        });
+        
+        uploadArea.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            if (!fileInput.files.length) {
+                this.classList.remove('border-primary', 'bg-primary bg-opacity-5');
+            }
+        });
+        
+        uploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                fileName.textContent = files[0].name;
+                this.classList.add('border-primary', 'bg-primary bg-opacity-5');
+                
+                // Trigger change event manually
+                const event = new Event('change', { bubbles: true });
+                fileInput.dispatchEvent(event);
+            }
+        });
+        
+        // Remove the click event listener that was causing double selection
+        // The file input is now positioned over the entire upload area
+    });
+    
+    function confirmClear() {
+        return confirm('⚠️ ARE YOU SURE?\n\nThis action will PERMANENTLY DELETE ALL stock data from the database.\n\nThis cannot be undone!');
+    }
+</script>
+
+<style>
+    .file-upload-area {
+        border: 2px dashed #dee2e6;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        background: #f8f9fa;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .file-upload-area:hover {
+        border-color: #4361ee;
+        background: rgba(67, 97, 238, 0.05);
+    }
+    
+    .file-upload-area.border-primary {
+        border-color: #4361ee !important;
+        background: rgba(67, 97, 238, 0.05);
+    }
+    
+    .border-dashed {
+        border-style: dashed !important;
+    }
+    
+    .cursor-pointer {
+        cursor: pointer;
+    }
+    
+    /* Make the file input cover the entire upload area */
+    .file-upload-area input[type="file"] {
+        cursor: pointer;
+    }
+</style>
+{% endblock %}
