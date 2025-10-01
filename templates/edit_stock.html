@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Header Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h1 class="h3 fw-bold text-dark mb-1">
+                    <i class="fas fa-{% if stock %}edit{% else %}plus{% endif %} text-primary me-2"></i>
+                    {% if stock %}Edit{% else %}Add New{% endif %} Stock Item
+                </h1>
+                <p class="text-muted mb-0">
+                    {% if stock %}Update existing stock information{% else %}Add a new product to your inventory{% endif %}
+                </p>
+            </div>
+            <a href="{{ url_for('show_stock') }}" class="btn btn-outline-secondary btn-modern">
+                <i class="fas fa-arrow-left me-2"></i>Back to Stock
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <!-- Stock Form Card -->
+        <div class="card filter-card">
+            <div class="card-body">
+                <form method="POST" id="stockForm">
+                    <div class="row">
+                        <!-- Product Name -->
+                        <div class="col-md-6 mb-3">
+                            <label for="name" class="form-label fw-semibold">
+                                Product Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" class="form-control search-box" id="name" name="name" 
+                                   value="{{ stock.name if stock }}" required maxlength="200">
+                            <div class="form-text">The commercial name of the product</div>
+                        </div>
+
+                        <!-- Generic Name -->
+                        <div class="col-md-6 mb-3">
+                            <label for="generic_name" class="form-label fw-semibold">Generic Name</label>
+                            <input type="text" class="form-control search-box" id="generic_name" name="generic_name" 
+                                   value="{{ stock.generic_name if stock }}" maxlength="200">
+                            <div class="form-text">Scientific or chemical name</div>
+                        </div>
+                    </div>
+
+                    <div class="row">                     
+                        <!-- Category -->
+                        <div class="col-md-6 mb-3">
+                            <label for="category" class="form-label fw-semibold">Category</label>
+                            <input type="text" class="form-control search-box" id="category" name="category" 
+                                   value="{{ stock.category if stock }}" maxlength="200">
+                            <div class="form-text">e.g., Medicine, Supplements, First Aid</div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <!-- Buy Price -->
+                        <div class="col-md-4 mb-3">
+                            <label for="buy_price" class="form-label fw-semibold">
+                                Buy Price <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control search-box" id="buy_price" name="buy_price" 
+                                       value="{{ '%.2f'|format(stock.buy_price) if stock else '0.00' }}" 
+                                       step="0.01" min="0" required>
+                            </div>
+                            <div class="form-text">Cost price per unit</div>
+                        </div>
+
+                        <!-- Sell Price -->
+                        <div class="col-md-4 mb-3">
+                            <label for="sell_price" class="form-label fw-semibold">
+                                Sell Price <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control search-box" id="sell_price" name="sell_price" 
+                                       value="{{ '%.2f'|format(stock.sell_price) if stock else '0.00' }}" 
+                                       step="0.01" min="0" required>
+                            </div>
+                            <div class="form-text">Selling price per unit</div>
+                        </div>
+
+                        <!-- Stock Quantity -->
+                        <div class="col-md-4 mb-3">
+                            <label for="stock_quantity" class="form-label fw-semibold">
+                                Stock Quantity <span class="text-danger">*</span>
+                            </label>
+                            <input type="number" class="form-control search-box" id="stock_quantity" name="stock_quantity" 
+                                   value="{{ stock.stock_quantity if stock else '0' }}" min="0" required>
+                            <div class="form-text">Current available quantity</div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <!-- Expiry Date -->
+                        <div class="col-md-6 mb-4">
+                            <label for="expiry_date" class="form-label fw-semibold">Expiry Date</label>
+                            <input type="date" class="form-control search-box" id="expiry_date" name="expiry_date" 
+                                   value="{{ stock.expiry_date.strftime('%Y-%m-%d') if stock and stock.expiry_date }}">
+                            <div class="form-text">Product expiration date (optional)</div>
+                        </div>
+
+                        <!-- Profit Display -->
+                        <div class="col-md-6 mb-4">
+                            <label class="form-label fw-semibold">Profit Calculation</label>
+                            <div class="p-3 bg-light rounded">
+                                <div class="row text-center">
+                                    <div class="col-6">
+                                        <small class="text-muted d-block">Profit per Unit</small>
+                                        <strong class="text-success" id="profitPerUnit">$0.00</strong>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted d-block">Total Value</small>
+                                        <strong class="text-primary" id="totalValue">$0.00</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Form Actions -->
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end border-top pt-4">
+                        <a href="{{ url_for('show_stock') }}" class="btn btn-outline-secondary btn-modern me-md-2">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                        {% if stock %}
+                        <button type="button" class="btn btn-danger btn-modern me-md-2" 
+                                onclick="confirmDelete({{ stock.id }})">
+                            <i class="fas fa-trash me-2"></i>Delete
+                        </button>
+                        {% endif %}
+                        <button type="submit" class="btn btn-primary-modern btn-modern">
+                            <i class="fas fa-save me-2"></i>
+                            {% if stock %}Update Stock{% else %}Add Stock{% endif %}
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Delete Form (Hidden) -->
+                {% if stock %}
+                <form id="deleteForm" action="{{ url_for('delete_stock', stock_id=stock.id) }}" method="POST" class="d-none">
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Quick Actions Card -->
+        <div class="card filter-card mt-4">
+            <div class="card-body">
+                <h5 class="card-title mb-3">
+                    <i class="fas fa-bolt text-primary me-2"></i>Quick Actions
+                </h5>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <a href="{{ url_for('upload_file') }}" class="btn btn-outline-primary w-100 btn-modern">
+                            <i class="fas fa-file-import me-2"></i>Import from Excel
+                        </a>
+                    </div>
+                    <div class="col-md-6">
+                        <a href="{{ url_for('add_stock') }}" class="btn btn-outline-success w-100 btn-modern">
+                            <i class="fas fa-plus me-2"></i>Add Another Item
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Calculate profit and total value in real-time
+        function calculateValues() {
+            const buyPrice = parseFloat(document.getElementById('buy_price').value) || 0;
+            const sellPrice = parseFloat(document.getElementById('sell_price').value) || 0;
+            const quantity = parseInt(document.getElementById('stock_quantity').value) || 0;
+            
+            const profitPerUnit = sellPrice - buyPrice;
+            const totalValue = sellPrice * quantity;
+            
+            document.getElementById('profitPerUnit').textContent = '$' + profitPerUnit.toFixed(2);
+            document.getElementById('totalValue').textContent = '$' + totalValue.toFixed(2);
+            
+            // Update color based on profit
+            const profitElement = document.getElementById('profitPerUnit');
+            profitElement.className = profitPerUnit >= 0 ? 'text-success' : 'text-danger';
+        }
+        
+        // Add event listeners for real-time calculation
+        document.getElementById('buy_price').addEventListener('input', calculateValues);
+        document.getElementById('sell_price').addEventListener('input', calculateValues);
+        document.getElementById('stock_quantity').addEventListener('input', calculateValues);
+        
+        // Initial calculation
+        calculateValues();
+        
+        // Form validation
+        document.getElementById('stockForm').addEventListener('submit', function(e) {
+            const buyPrice = parseFloat(document.getElementById('buy_price').value);
+            const sellPrice = parseFloat(document.getElementById('sell_price').value);
+            const quantity = parseInt(document.getElementById('stock_quantity').value);
+            
+            if (buyPrice < 0 || sellPrice < 0 || quantity < 0) {
+                e.preventDefault();
+                alert('Please enter positive values for prices and quantity.');
+                return false;
+            }
+            
+            if (sellPrice < buyPrice) {
+                if (!confirm('Sell price is lower than buy price. This will result in a loss. Continue?')) {
+                    e.preventDefault();
+                    return false;
+                }
+            }
+        });
+    });
+    
+    function confirmDelete(stockId) {
+        if (confirm('Are you sure you want to delete this stock item? This action cannot be undone.')) {
+            document.getElementById('deleteForm').submit();
+        }
+    }
+</script>
+{% endblock %}

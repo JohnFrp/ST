@@ -10,9 +10,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Database configuration
-password = "Johnh4k3r"
+password = os.environ.get('DB_PASSWORD', 'Johnh4k3r')
 encoded_password = quote_plus(password)
-DATABASE_URI = f'postgresql://postgres.dtcbyjnvggptyerrbxwp:{encoded_password}@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres'
+DATABASE_URI = os.environ.get('DATABASE_URL', f'postgresql://postgres.dtcbyjnvggptyerrbxwp:{encoded_password}@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres')
 
 def create_app():
     app = Flask(__name__)
@@ -27,19 +27,20 @@ def create_app():
     
     db = SQLAlchemy()
 
-    # Define models
+    # Define models with larger field sizes
     class Stock(db.Model):
         __tablename__ = 'stocks'
         
         id = db.Column(db.Integer, primary_key=True)
-        name = db.Column(db.String(255), nullable=False)
-        generic_name = db.Column(db.String(255))        
-        category = db.Column(db.String(255))
+        name = db.Column(db.String(200), nullable=False)
+        generic_name = db.Column(db.String(200))        
+        category = db.Column(db.String(200))
         buy_price = db.Column(db.Float, nullable=False)
         sell_price = db.Column(db.Float, nullable=False)
         stock_quantity = db.Column(db.Integer, nullable=False)
         expiry_date = db.Column(db.Date)
         created_at = db.Column(db.DateTime, default=datetime.utcnow)
+        updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
         
         def __repr__(self):
             return f'<Stock {self.name}>'
@@ -56,26 +57,229 @@ def create_app():
                 'expiry_date': self.expiry_date.strftime('%Y-%m-%d') if self.expiry_date else None,
                 'profit_per_unit': round(self.sell_price - self.buy_price, 2),
                 'total_value': round(self.sell_price * self.stock_quantity, 2),
-                'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None
+                'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
+                'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S') if self.updated_at else None
             }
 
     # Initialize the app with extensions
     db.init_app(app)
 
-    # Create tables before first request
-    #@app.before_first_request
-    def create_tables():
-        with app.app_context():
-            try:
-                db.create_all()
-                print("✅ Database tables created successfully!")
-            except Exception as e:
-                print(f"❌ Error creating tables: {e}")
+    def truncate_string(value, max_length):
+        """Truncate string to specified max length"""
+        if value and len(str(value)) > max_length:
+            return str(value)[:max_length-3] + "..."
+        return value
 
     @app.route('/')
     def index():
         return redirect(url_for('show_stock'))
 
+    # Stock List View
+    @app.route('/stock')
+    def show_stock():
+        try:
+            # Get filter parameters
+            category_filter = request.args.get('category', '')
+            search_query = request.args.get('search', '')
+            
+            # Base query
+            query = Stock.query
+            
+            # Apply filters
+            if category_filter:
+                query = query.filter(Stock.category == category_filter)
+            
+            if search_query:
+                query = query.filter(
+                    (Stock.name.ilike(f'%{search_query}%')) |
+                    (Stock.generic_name.ilike(f'%{search_query}%'))                    
+                )
+            
+            stocks = query.order_by(Stock.name).all()
+            
+            # Get unique categories for filter dropdown
+            categories = db.session.query(Stock.category).distinct().all()
+            categories = [cat[0] for cat in categories if cat[0]]
+            
+            # Calculate summary statistics
+            total_items = sum(stock.stock_quantity for stock in stocks)
+            total_value = sum(stock.sell_price * stock.stock_quantity for stock in stocks)
+            total_profit_potential = sum((stock.sell_price - stock.buy_price) * stock.stock_quantity for stock in stocks)
+            
+            return render_template('stock.html', 
+                                 stocks=stocks,
+                                 categories=categories,
+                                 total_items=total_items,
+                                 total_value=round(total_value, 2),
+                                 total_profit_potential=round(total_profit_potential, 2),
+                                 now=datetime.now())
+        except Exception as e:
+            flash(f'Error loading stock data: {str(e)}')
+            return render_template('stock.html', 
+                                 stocks=[],
+                                 categories=[],
+                                 total_items=0,
+                                 total_value=0,
+                                 total_profit_potential=0,
+                                 now=datetime.now())
+
+    # Add New Stock
+    @app.route('/stock/new', methods=['GET', 'POST'])
+    def add_stock():
+        if request.method == 'POST':
+            try:
+                # Get form data
+                name = request.form.get('name', '').strip()
+                generic_name = request.form.get('generic_name', '').strip()                
+                category = request.form.get('category', '').strip()
+                buy_price = request.form.get('buy_price', '0')
+                sell_price = request.form.get('sell_price', '0')
+                stock_quantity = request.form.get('stock_quantity', '0')
+                expiry_date_str = request.form.get('expiry_date', '')
+
+                # Validate required fields
+                if not name:
+                    flash('Product name is required', 'error')
+                    return render_template('edit_stock.html')
+
+                # Convert and validate numeric fields
+                try:
+                    buy_price = float(buy_price)
+                    sell_price = float(sell_price)
+                    stock_quantity = int(stock_quantity)
+                except ValueError:
+                    flash('Please enter valid numeric values for prices and quantity', 'error')
+                    return render_template('edit_stock.html')
+
+                # Handle expiry date
+                expiry_date = None
+                if expiry_date_str:
+                    try:
+                        expiry_date = datetime.strptime(expiry_date_str, '%Y-%m-%d').date()
+                    except ValueError:
+                        flash('Please enter a valid date in YYYY-MM-DD format', 'error')
+                        return render_template('edit_stock.html')
+
+                # Check if stock already exists
+                existing_stock = Stock.query.filter_by(name=name).first()
+                if existing_stock:
+                    flash(f'Stock item "{name}" already exists. Use edit instead.', 'error')
+                    return render_template('edit_stock.html')
+
+                # Create new stock
+                stock = Stock(
+                    name=name,
+                    generic_name=generic_name,                    
+                    category=category,
+                    buy_price=buy_price,
+                    sell_price=sell_price,
+                    stock_quantity=stock_quantity,
+                    expiry_date=expiry_date
+                )
+                
+                db.session.add(stock)
+                db.session.commit()
+                
+                flash(f'Stock item "{name}" added successfully!', 'success')
+                return redirect(url_for('show_stock'))
+
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Error adding stock item: {str(e)}', 'error')
+                return render_template('edit_stock.html')
+
+        return render_template('edit_stock.html', stock=None)
+
+    # Edit Stock
+    @app.route('/stock/<int:stock_id>/edit', methods=['GET', 'POST'])
+    def edit_stock(stock_id):
+        stock = Stock.query.get_or_404(stock_id)
+        
+        if request.method == 'POST':
+            try:
+                # Get form data
+                stock.name = request.form.get('name', '').strip()
+                stock.generic_name = request.form.get('generic_name', '').strip()                
+                stock.category = request.form.get('category', '').strip()
+                
+                # Convert and validate numeric fields
+                try:
+                    stock.buy_price = float(request.form.get('buy_price', '0'))
+                    stock.sell_price = float(request.form.get('sell_price', '0'))
+                    stock.stock_quantity = int(request.form.get('stock_quantity', '0'))
+                except ValueError:
+                    flash('Please enter valid numeric values for prices and quantity', 'error')
+                    return render_template('edit_stock.html', stock=stock)
+
+                # Handle expiry date
+                expiry_date_str = request.form.get('expiry_date', '')
+                if expiry_date_str:
+                    try:
+                        stock.expiry_date = datetime.strptime(expiry_date_str, '%Y-%m-%d').date()
+                    except ValueError:
+                        flash('Please enter a valid date in YYYY-MM-DD format', 'error')
+                        return render_template('edit_stock.html', stock=stock)
+                else:
+                    stock.expiry_date = None
+
+                stock.updated_at = datetime.utcnow()
+                
+                db.session.commit()
+                
+                flash(f'Stock item "{stock.name}" updated successfully!', 'success')
+                return redirect(url_for('show_stock'))
+
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Error updating stock item: {str(e)}', 'error')
+                return render_template('edit_stock.html', stock=stock)
+
+        return render_template('edit_stock.html', stock=stock)
+
+    # Delete Stock
+    @app.route('/stock/<int:stock_id>/delete', methods=['POST'])
+    def delete_stock(stock_id):
+        try:
+            stock = Stock.query.get_or_404(stock_id)
+            stock_name = stock.name
+            
+            db.session.delete(stock)
+            db.session.commit()
+            
+            flash(f'Stock item "{stock_name}" deleted successfully!', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error deleting stock item: {str(e)}', 'error')
+        
+        return redirect(url_for('show_stock'))
+
+    # Quick Edit Modal Data
+    @app.route('/stock/<int:stock_id>')
+    def get_stock(stock_id):
+        try:
+            stock = Stock.query.get_or_404(stock_id)
+            return jsonify(stock.to_dict())
+        except Exception as e:
+            return jsonify({'error': str(e)}), 404
+
+    # Bulk Update Stock Quantities
+    @app.route('/stock/bulk-update', methods=['POST'])
+    def bulk_update_stock():
+        try:
+            updates = request.get_json()
+            for update in updates:
+                stock = Stock.query.get(update['id'])
+                if stock:
+                    stock.stock_quantity = update['quantity']
+                    stock.updated_at = datetime.utcnow()
+            
+            db.session.commit()
+            return jsonify({'success': True, 'message': 'Stock quantities updated successfully'})
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    # Existing routes (upload, clear-stock, etc.)
     @app.route('/upload', methods=['GET', 'POST'])
     def upload_file():
         if request.method == 'POST':
@@ -107,60 +311,80 @@ def create_app():
                     # Process data
                     stocks_added = 0
                     stocks_updated = 0
-                    for _, row in df.iterrows():
-                        # Handle expiry date conversion
-                        expiry_date = None
-                        if 'expiry_date' in df.columns and pd.notna(row['expiry_date']):
-                            if isinstance(row['expiry_date'], str):
-                                try:
-                                    expiry_date = datetime.strptime(row['expiry_date'], '%Y-%m-%d').date()
-                                except ValueError:
-                                    # Try different date formats
+                    errors = []
+                    
+                    for index, row in df.iterrows():
+                        try:
+                            # Handle expiry date conversion
+                            expiry_date = None
+                            if 'expiry_date' in df.columns and pd.notna(row['expiry_date']):
+                                if isinstance(row['expiry_date'], str):
                                     try:
-                                        expiry_date = datetime.strptime(row['expiry_date'], '%d/%m/%Y').date()
+                                        expiry_date = datetime.strptime(row['expiry_date'], '%Y-%m-%d').date()
                                     except ValueError:
-                                        # Try parsing as datetime object
                                         try:
-                                            expiry_date = row['expiry_date'].date()
+                                            expiry_date = datetime.strptime(row['expiry_date'], '%d/%m/%Y').date()
+                                        except ValueError:
+                                            try:
+                                                expiry_date = row['expiry_date'].date()
+                                            except:
+                                                expiry_date = None
+                                else:
+                                    try:
+                                        expiry_date = row['expiry_date'].date()
+                                    except AttributeError:
+                                        try:
+                                            expiry_date = row['expiry_date'].to_pydatetime().date()
                                         except:
                                             expiry_date = None
+                            
+                            # Truncate long text fields
+                            name = truncate_string(row['name'], 200)
+                            generic_name = truncate_string(row.get('generic_name', ''), 200)                            
+                            category = truncate_string(row.get('category', ''), 200)
+                            
+                            # Validate numeric fields
+                            try:
+                                buy_price = float(row['buy_price'])
+                                sell_price = float(row['sell_price'])
+                                stock_quantity = int(row['stock_quantity'])
+                            except (ValueError, TypeError) as e:
+                                errors.append(f"Row {index+2}: Invalid numeric data - {e}")
+                                continue
+                            
+                            # Check if stock already exists
+                            existing_stock = Stock.query.filter_by(name=name).first()
+                            if existing_stock:
+                                # Update existing stock
+                                existing_stock.generic_name = generic_name                                
+                                existing_stock.category = category
+                                existing_stock.buy_price = buy_price
+                                existing_stock.sell_price = sell_price
+                                existing_stock.stock_quantity = stock_quantity
+                                existing_stock.expiry_date = expiry_date
+                                existing_stock.updated_at = datetime.utcnow()
+                                stocks_updated += 1
                             else:
-                                try:
-                                    expiry_date = row['expiry_date'].date()
-                                except AttributeError:
-                                    # Handle pandas Timestamp
-                                    try:
-                                        expiry_date = row['expiry_date'].to_pydatetime().date()
-                                    except:
-                                        expiry_date = None
-                        
-                        # Check if stock already exists
-                        existing_stock = Stock.query.filter_by(name=row['name']).first()
-                        if existing_stock:
-                            # Update existing stock
-                            existing_stock.generic_name = row.get('generic_name', existing_stock.generic_name)                            
-                            existing_stock.category = row.get('category', existing_stock.category)
-                            existing_stock.buy_price = float(row['buy_price'])
-                            existing_stock.sell_price = float(row['sell_price'])
-                            existing_stock.stock_quantity = int(row['stock_quantity'])
-                            existing_stock.expiry_date = expiry_date
-                            stocks_updated += 1
-                        else:
-                            # Create new stock
-                            stock = Stock(
-                                name=row['name'],
-                                generic_name=row.get('generic_name', ''),                                
-                                category=row.get('category', ''),
-                                buy_price=float(row['buy_price']),
-                                sell_price=float(row['sell_price']),
-                                stock_quantity=int(row['stock_quantity']),
-                                expiry_date=expiry_date
-                            )
-                            db.session.add(stock)
-                            stocks_added += 1
+                                # Create new stock
+                                stock = Stock(
+                                    name=name,
+                                    generic_name=generic_name,                                    
+                                    category=category,
+                                    buy_price=buy_price,
+                                    sell_price=sell_price,
+                                    stock_quantity=stock_quantity,
+                                    expiry_date=expiry_date
+                                )
+                                db.session.add(stock)
+                                stocks_added += 1
+                                
+                        except Exception as e:
+                            errors.append(f"Row {index+2}: {str(e)}")
+                            continue
                     
                     db.session.commit()
                     
+                    # Show success message with any errors
                     if stocks_updated > 0 and stocks_added > 0:
                         flash(f'Successfully imported {stocks_added} new stock items and updated {stocks_updated} existing items')
                     elif stocks_added > 0:
@@ -170,89 +394,21 @@ def create_app():
                     else:
                         flash('No changes made to the database')
                     
+                    if errors:
+                        error_msg = f"Some errors occurred: {', '.join(errors[:5])}"
+                        if len(errors) > 5:
+                            error_msg += f" ... and {len(errors) - 5} more errors"
+                        flash(error_msg, 'warning')
+                    
                 except Exception as e:
                     db.session.rollback()
                     flash(f'Error importing file: {str(e)}')
-                    print(f"Error details: {e}")
                 
                 return redirect(url_for('show_stock'))
             else:
                 flash('Please upload a valid Excel file (.xlsx or .xls)')
         
         return render_template('upload.html')
-
-    @app.route('/stock')
-    def show_stock():
-        try:
-            # Get filter parameters
-            category_filter = request.args.get('category', '')
-            search_query = request.args.get('search', '')
-            
-            # Base query
-            query = Stock.query
-            
-            # Apply filters
-            if category_filter:
-                query = query.filter(Stock.category == category_filter)
-            
-            if search_query:
-                query = query.filter(
-                    (Stock.name.ilike(f'%{search_query}%')) |
-                    (Stock.generic_name.ilike(f'%{search_query}%'))                   
-                )
-            
-            stocks = query.order_by(Stock.name).all()
-            
-            # Get unique categories for filter dropdown
-            categories = db.session.query(Stock.category).distinct().all()
-            categories = [cat[0] for cat in categories if cat[0]]
-            
-            # Calculate summary statistics
-            total_items = sum(stock.stock_quantity for stock in stocks)
-            total_value = sum(stock.sell_price * stock.stock_quantity for stock in stocks)
-            total_profit_potential = sum((stock.sell_price - stock.buy_price) * stock.stock_quantity for stock in stocks)
-            
-            return render_template('stock.html', 
-                                 stocks=stocks,
-                                 categories=categories,
-                                 total_items=total_items,
-                                 total_value=round(total_value, 2),
-                                 total_profit_potential=round(total_profit_potential, 2),
-                                 now=datetime.now())
-        except Exception as e:
-            flash(f'Error loading stock data: {str(e)}')
-            return render_template('stock.html', 
-                                 stocks=[],
-                                 categories=[],
-                                 total_items=0,
-                                 total_value=0,
-                                 total_profit_potential=0,
-                                 now=datetime.now())
-
-    @app.route('/api/stock')
-    def api_stock():
-        try:
-            stocks = Stock.query.all()
-            return jsonify([stock.to_dict() for stock in stocks])
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-
-    @app.route('/api/stock/<int:stock_id>')
-    def api_stock_detail(stock_id):
-        try:
-            stock = Stock.query.get_or_404(stock_id)
-            return jsonify(stock.to_dict())
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-
-    @app.route('/api/categories')
-    def api_categories():
-        try:
-            categories = db.session.query(Stock.category).distinct().all()
-            categories = [cat[0] for cat in categories if cat[0]]
-            return jsonify(categories)
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
 
     @app.route('/clear-stock', methods=['POST'])
     def clear_stock():
