@@ -4,7 +4,6 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, f
 import pandas as pd
 from datetime import datetime
 from urllib.parse import quote_plus
-from supabase import create_client, Client
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -14,9 +13,6 @@ load_dotenv()
 password = os.environ.get('DB_PASSWORD', 'Johnh4k3r')
 encoded_password = quote_plus(password)
 DATABASE_URI = os.environ.get('DATABASE_URL', f'postgresql://postgres.dtcbyjnvggptyerrbxwp:{encoded_password}@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres')
-url: str = os.environ.get("SUPABASE_URL")
-key: str = os.environ.get("SUPABASE_KEY")
-supabase: Client = create_client(url, key)
 
 def create_app():
     app = Flask(__name__)
@@ -77,90 +73,6 @@ def create_app():
     @app.route('/')
     def index():
         return redirect(url_for('show_stock'))
-
-    @app.route('/dosage')
-    def dosage_form():
-        try:
-            # Get all data from 'dosage_forms' table
-            response = supabase.from_('dosage_forms').select('*').order('english').execute()
-            
-            # Send data to template with 'dosage_data' variable
-            return render_template('dosage.html', dosage_data=response.data)
-        
-        except Exception as e:
-            # Show error message if error occurs
-            print(f"An error occurred: {e}")
-            # Return template with empty data
-            return render_template('dosage.html', dosage_data=[], error="Could not fetch data.")
-
-    @app.route('/dosage/add', methods=['GET', 'POST'])
-    def add_dosage_form():
-        if request.method == 'POST':
-            try:
-                english = request.form.get('english')
-                burmese = request.form.get('burmese')
-                
-                if not english:
-                    return render_template('add_dosage.html', error="English name is required")
-                
-                # Insert new dosage form
-                response = supabase.from_('dosage_forms').insert({
-                    'english': english,
-                    'burmese': burmese
-                }).execute()
-                
-                return redirect('/dosage')
-                
-            except Exception as e:
-                print(f"An error occurred: {e}")
-                return render_template('add_dosage.html', error="Could not add dosage form")
-        
-        return render_template('add_dosage.html')
-
-    @app.route('/dosage/edit/<int:id>', methods=['GET', 'POST'])
-    def edit_dosage_form(id):
-        if request.method == 'POST':
-            try:
-                english = request.form.get('english')
-                burmese = request.form.get('burmese')
-                
-                if not english:
-                    return render_template('edit_dosage.html', error="English name is required")
-                
-                # Update dosage form
-                response = supabase.from_('dosage_forms').update({
-                    'english': english,
-                    'burmese': burmese
-                }).eq('id', id).execute()
-                
-                return redirect('/dosage')
-                
-            except Exception as e:
-                print(f"An error occurred: {e}")
-                return render_template('edit_dosage.html', error="Could not update dosage form")
-        
-        try:
-            # Get existing dosage form data
-            response = supabase.from_('dosage_forms').select('*').eq('id', id).execute()
-            if response.data:
-                return render_template('edit_dosage.html', dosage=response.data[0])
-            else:
-                return redirect('/dosage')
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            return redirect('/dosage')
-
-    @app.route('/dosage/delete/<int:id>')
-    def delete_dosage_form(id):
-        try:
-            # Delete dosage form
-            response = supabase.from_('dosage_forms').delete().eq('id', id).execute()
-            return redirect('/dosage')
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            return redirect('/dosage')
-
-                
 
     # Stock List View
     @app.route('/stock')
