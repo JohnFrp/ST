@@ -567,10 +567,10 @@ def create_app():
                     'generic_name': stock.generic_name or '',
                     'manufacturer': stock.manufacturer or '',
                     'Category': stock.category or '',
-                    'Buy Price': stock.buy_price,
-                    'Sell Price': stock.sell_price,
-                    'Stock Quantity': stock.stock_quantity,
-                    'Expiry Date': stock.expiry_date.strftime('%Y-%m-%d') if stock.expiry_date else '',                    
+                    'buy_price': stock.buy_price,
+                    'sell_price': stock.sell_price,
+                    'stock_quantity': stock.stock_quantity,
+                    'expiry_date': stock.expiry_date.strftime('%Y-%m-%d') if stock.expiry_date else '',                    
                 })
             
             df = pd.DataFrame(data)
