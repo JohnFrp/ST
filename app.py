@@ -566,11 +566,11 @@ def create_app():
                     'name': stock.name,
                     'generic_name': stock.generic_name or '',
                     'manufacturer': stock.manufacturer or '',
-                    'Category': stock.category or '',
+                    'category': stock.category or '',
                     'buy_price': stock.buy_price,
                     'sell_price': stock.sell_price,
                     'stock_quantity': stock.stock_quantity,
-                    'expiry_date': stock.expiry_date.strftime('%Y-%m-%d') if stock.expiry_date else '',                    
+                    'expiry_date': stock.expiry_date.strftime('%m/%d/%Y') if stock.expiry_date else '',                    
                 })
             
             df = pd.DataFrame(data)
@@ -601,8 +601,8 @@ def create_app():
             
             # Prepare response
             output.seek(0)
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f'pharmacy_stock_export_{timestamp}.xlsx'
+            
+            filename = 'stock.xlsx'
             
             return send_file(
                 output,
