@@ -60,7 +60,7 @@ def create_app():
                 'buy_price': self.buy_price,
                 'sell_price': self.sell_price,
                 'stock_quantity': self.stock_quantity,
-                'expiry_date': self.expiry_date.strftime('%Y-%m-%d') if self.expiry_date else None,
+                'expiry_date': self.expiry_date.strftime('%Y-%m-%d'),
                 'profit_per_unit': round(self.sell_price - self.buy_price, 2),
                 'total_value': round(self.sell_price * self.stock_quantity, 2),
                 'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
@@ -564,9 +564,9 @@ def create_app():
             for stock in stocks:
                 data.append({                    
                     'name': stock.name,
-                    'generic_name': stock.generic_name or '',
-                    'manufacturer': stock.manufacturer or '',
-                    'category': stock.category or '',
+                    'generic_name': stock.generic_name,
+                    'manufacturer': stock.manufacturer,
+                    'category': stock.category,
                     'buy_price': stock.buy_price,
                     'sell_price': stock.sell_price,
                     'stock_quantity': stock.stock_quantity,
