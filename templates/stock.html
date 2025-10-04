@@ -144,7 +144,7 @@
                 <thead>
                     <tr>
                         <th><i class="fas fa-tag me-2"></i>Product Name</th>
-                        <th><i class="fas fa-prescription me-2"></i>Generic Name</th>
+                        <th><i class="fas fa-prescription me-2"></i>Generic Name</th>                        
                         <th><i class="fas fa-tags me-2"></i>Category</th>
                         <th><i class="fas fa-shopping-cart me-2"></i>Buy Price</th>
                         <th><i class="fas fa-tag me-2"></i>Sell Price</th>
@@ -172,7 +172,7 @@
                         </td>
                         <td>
                             <span class="fw-semibold">{{ stock.generic_name or '-' }}</span>
-                        </td>
+                        </td>                        
                         <td>
                             {% if stock.category %}
                             <span class="badge bg-primary badge-modern">{{ stock.category[:30] }}{% if stock.category|length > 30 %}...{% endif %}</span>

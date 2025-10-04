@@ -1,6 +1,6 @@
 import os
 import io
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_file
 import pandas as pd
 from datetime import datetime
 from urllib.parse import quote_plus
@@ -37,7 +37,8 @@ def create_app():
         
         id = db.Column(db.Integer, primary_key=True)
         name = db.Column(db.String(200), nullable=False)
-        generic_name = db.Column(db.String(200))        
+        generic_name = db.Column(db.String(200))
+        manufacturer = db.Column(db.String(200))        
         category = db.Column(db.String(200))
         buy_price = db.Column(db.Float, nullable=False)
         sell_price = db.Column(db.Float, nullable=False)
@@ -53,7 +54,8 @@ def create_app():
             return {
                 'id': self.id,
                 'name': self.name,
-                'generic_name': self.generic_name,                
+                'generic_name': self.generic_name, 
+                'manufacturer': self.manufacturer,               
                 'category': self.category,
                 'buy_price': self.buy_price,
                 'sell_price': self.sell_price,
@@ -81,11 +83,17 @@ def create_app():
     @app.route('/dosage')
     def dosage_form():
         try:
-            # Get all data from 'dosage_forms' table
-            response = supabase.from_('dosage_forms').select('*').order('english').execute()
+            # Get all data from 'dosage_forms' table using Supabase
+            response = supabase.table('dosage_forms').select('*').order('english').execute()
+            
+            # Check if response has data
+            if hasattr(response, 'data'):
+                dosage_data = response.data
+            else:
+                dosage_data = []
             
             # Send data to template with 'dosage_data' variable
-            return render_template('dosage.html', dosage_data=response.data)
+            return render_template('dosage.html', dosage_data=dosage_data)
         
         except Exception as e:
             # Show error message if error occurs
@@ -97,19 +105,26 @@ def create_app():
     def add_dosage_form():
         if request.method == 'POST':
             try:
-                english = request.form.get('english')
-                burmese = request.form.get('burmese')
+                english = request.form.get('english', '').strip()
+                burmese = request.form.get('burmese', '').strip()
                 
                 if not english:
                     return render_template('add_dosage.html', error="English name is required")
                 
-                # Insert new dosage form
-                response = supabase.from_('dosage_forms').insert({
+                # Insert new dosage form using Supabase
+                data = {
                     'english': english,
-                    'burmese': burmese
-                }).execute()
+                    'burmese': burmese if burmese else None
+                }
                 
-                return redirect('/dosage')
+                response = supabase.table('dosage_forms').insert(data).execute()
+                
+                # Check if insertion was successful
+                if hasattr(response, 'data') and response.data:
+                    flash('Dosage form added successfully!', 'success')
+                    return redirect('/dosage')
+                else:
+                    return render_template('add_dosage.html', error="Failed to add dosage form")
                 
             except Exception as e:
                 print(f"An error occurred: {e}")
@@ -121,46 +136,64 @@ def create_app():
     def edit_dosage_form(id):
         if request.method == 'POST':
             try:
-                english = request.form.get('english')
-                burmese = request.form.get('burmese')
+                english = request.form.get('english', '').strip()
+                burmese = request.form.get('burmese', '').strip()
                 
                 if not english:
                     return render_template('edit_dosage.html', error="English name is required")
                 
-                # Update dosage form
-                response = supabase.from_('dosage_forms').update({
+                # Update dosage form using Supabase
+                data = {
                     'english': english,
-                    'burmese': burmese
-                }).eq('id', id).execute()
+                    'burmese': burmese if burmese else None
+                }
                 
-                return redirect('/dosage')
+                response = supabase.table('dosage_forms').update(data).eq('id', id).execute()
+                
+                # Check if update was successful
+                if hasattr(response, 'data') and response.data:
+                    flash('Dosage form updated successfully!', 'success')
+                    return redirect('/dosage')
+                else:
+                    return render_template('edit_dosage.html', error="Failed to update dosage form")
                 
             except Exception as e:
                 print(f"An error occurred: {e}")
                 return render_template('edit_dosage.html', error="Could not update dosage form")
         
         try:
-            # Get existing dosage form data
-            response = supabase.from_('dosage_forms').select('*').eq('id', id).execute()
-            if response.data:
-                return render_template('edit_dosage.html', dosage=response.data[0])
+            # Get existing dosage form data using Supabase
+            response = supabase.table('dosage_forms').select('*').eq('id', id).execute()
+            
+            if hasattr(response, 'data') and response.data:
+                dosage = response.data[0]
+                return render_template('edit_dosage.html', dosage=dosage)
             else:
+                flash('Dosage form not found', 'error')
                 return redirect('/dosage')
+                
         except Exception as e:
             print(f"An error occurred: {e}")
+            flash('Error loading dosage form', 'error')
             return redirect('/dosage')
 
     @app.route('/dosage/delete/<int:id>')
     def delete_dosage_form(id):
         try:
-            # Delete dosage form
-            response = supabase.from_('dosage_forms').delete().eq('id', id).execute()
-            return redirect('/dosage')
+            # Delete dosage form using Supabase
+            response = supabase.table('dosage_forms').delete().eq('id', id).execute()
+            
+            # Check if deletion was successful
+            if hasattr(response, 'data'):
+                flash('Dosage form deleted successfully!', 'success')
+            else:
+                flash('Failed to delete dosage form', 'error')
+                
         except Exception as e:
             print(f"An error occurred: {e}")
-            return redirect('/dosage')
-
-                
+            flash('Error deleting dosage form', 'error')
+        
+        return redirect('/dosage')
 
     # Stock List View
     @app.route('/stock')
@@ -184,6 +217,7 @@ def create_app():
                 )
             
             stocks = query.order_by(Stock.name).all()
+            manufacturer = db.session.query(Stock.manufacturer).distinct().all()
             
             # Get unique categories for filter dropdown
             categories = db.session.query(Stock.category).distinct().all()
@@ -197,6 +231,7 @@ def create_app():
             return render_template('stock.html', 
                                  stocks=stocks,
                                  categories=categories,
+                                 manufacturer=manufacturer,
                                  total_items=total_items,
                                  total_value=round(total_value, 2),
                                  total_profit_potential=round(total_profit_potential, 2),
@@ -206,6 +241,7 @@ def create_app():
             return render_template('stock.html', 
                                  stocks=[],
                                  categories=[],
+                                 manufacturer=[],
                                  total_items=0,
                                  total_value=0,
                                  total_profit_potential=0,
@@ -218,7 +254,8 @@ def create_app():
             try:
                 # Get form data
                 name = request.form.get('name', '').strip()
-                generic_name = request.form.get('generic_name', '').strip()                
+                generic_name = request.form.get('generic_name', '').strip()
+                manufacturer = request.form.get('manufacturer', '').strip()
                 category = request.form.get('category', '').strip()
                 buy_price = request.form.get('buy_price', '0')
                 sell_price = request.form.get('sell_price', '0')
@@ -257,7 +294,8 @@ def create_app():
                 # Create new stock
                 stock = Stock(
                     name=name,
-                    generic_name=generic_name,                    
+                    generic_name=generic_name,
+                    manufacturer=manufacturer,                    
                     category=category,
                     buy_price=buy_price,
                     sell_price=sell_price,
@@ -289,6 +327,7 @@ def create_app():
                 stock.name = request.form.get('name', '').strip()
                 stock.generic_name = request.form.get('generic_name', '').strip()                
                 stock.category = request.form.get('category', '').strip()
+                stoc.manufacturer = request.form.get('manufacturer', '').strip()
                 
                 # Convert and validate numeric fields
                 try:
@@ -429,6 +468,7 @@ def create_app():
                             # Truncate long text fields
                             name = truncate_string(row['name'], 200)
                             generic_name = truncate_string(row.get('generic_name', ''), 200)                            
+                            manufacturer = truncate_string(row.get('manufacturer', ''), 200)
                             category = truncate_string(row.get('category', ''), 200)
                             
                             # Validate numeric fields
@@ -444,7 +484,8 @@ def create_app():
                             existing_stock = Stock.query.filter_by(name=name).first()
                             if existing_stock:
                                 # Update existing stock
-                                existing_stock.generic_name = generic_name                                
+                                existing_stock.generic_name = generic_name 
+                                existing_stock.manufacturer = manufacturer                               
                                 existing_stock.category = category
                                 existing_stock.buy_price = buy_price
                                 existing_stock.sell_price = sell_price
@@ -456,7 +497,8 @@ def create_app():
                                 # Create new stock
                                 stock = Stock(
                                     name=name,
-                                    generic_name=generic_name,                                    
+                                    generic_name=generic_name, 
+                                    manufacturer=manufacturer,                                   
                                     category=category,
                                     buy_price=buy_price,
                                     sell_price=sell_price,
@@ -510,6 +552,68 @@ def create_app():
             flash(f'Error clearing stock: {str(e)}')
         
         return redirect(url_for('show_stock'))
+
+    @app.route('/export')
+    def export_excel():
+        try:
+            # Get all stock data
+            stocks = Stock.query.order_by(Stock.name).all()
+            
+            # Create a DataFrame from the stock data
+            data = []
+            for stock in stocks:
+                data.append({                    
+                    'name': stock.name,
+                    'generic_name': stock.generic_name or '',
+                    'manufacturer': stock.manufacturer or '',
+                    'Category': stock.category or '',
+                    'Buy Price': stock.buy_price,
+                    'Sell Price': stock.sell_price,
+                    'Stock Quantity': stock.stock_quantity,
+                    'Expiry Date': stock.expiry_date.strftime('%Y-%m-%d') if stock.expiry_date else '',                    
+                })
+            
+            df = pd.DataFrame(data)
+            
+            # Create Excel file in memory
+            output = io.BytesIO()
+            
+            # Create Excel writer
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                # Write main stock data
+                df.to_excel(writer, sheet_name='Stock Data', index=False)
+                
+                # Auto-adjust column widths
+                worksheet = writer.sheets['Stock Data']
+                for column in worksheet.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+                    for cell in column:
+                        try:
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    adjusted_width = min(max_length + 2, 50)
+                    worksheet.column_dimensions[column_letter].width = adjusted_width
+                
+                
+            
+            # Prepare response
+            output.seek(0)
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f'pharmacy_stock_export_{timestamp}.xlsx'
+            
+            return send_file(
+                output,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                as_attachment=True,
+                download_name=filename
+            )
+            
+        except Exception as e:
+            flash(f'Error exporting Excel file: {str(e)}', 'error')
+            return redirect(url_for('show_stock'))
 
     @app.route('/init-db')
     def init_db():
