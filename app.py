@@ -328,7 +328,20 @@ def create_app():
             flash('Stock item not found', 'error')
             return redirect(url_for('show_stock'))
         
-        stock = response.data[0]
+        stock_data = response.data[0]
+        
+        # Process the stock data for the template
+        stock = {
+            'id': stock_data.get('id'),
+            'name': stock_data.get('name'),
+            'generic_name': stock_data.get('generic_name'),
+            'category': stock_data.get('category'),
+            'manufacturer': stock_data.get('manufacturer'),
+            'buy_price': float(stock_data.get('buy_price', 0)),
+            'sell_price': float(stock_data.get('sell_price', 0)),
+            'stock_quantity': stock_data.get('stock_quantity', 0),
+            'expiry_date': parse_date(stock_data.get('expiry_date'))  # This ensures it's a date object or None
+        }
         
         if request.method == 'POST':
             try:
