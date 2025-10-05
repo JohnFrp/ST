@@ -2,7 +2,7 @@ import os
 import io
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_file
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
 from urllib.parse import quote_plus
 from supabase import create_client, Client
 from dotenv import load_dotenv
@@ -11,9 +11,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Database configuration
-password = os.environ.get('DB_PASSWORD', 'Johnh4k3r')
-encoded_password = quote_plus(password)
-DATABASE_URI = os.environ.get('DATABASE_URL', f'postgresql://postgres.dtcbyjnvggptyerrbxwp:{encoded_password}@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres')
 url: str = os.environ.get("SUPABASE_URL")
 key: str = os.environ.get("SUPABASE_KEY")
 supabase: Client = create_client(url, key)
@@ -22,59 +19,30 @@ def create_app():
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'pharmacy-pos-secret-key')
     
-    # Configure the database URI
-    app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URI
-    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-    # Initialize extensions within app context
-    from flask_sqlalchemy import SQLAlchemy
-    
-    db = SQLAlchemy()
-
-    # Define models with larger field sizes
-    class Stock(db.Model):
-        __tablename__ = 'stocks'
-        
-        id = db.Column(db.Integer, primary_key=True)
-        name = db.Column(db.String(200), nullable=False)
-        generic_name = db.Column(db.String(200))
-        manufacturer = db.Column(db.String(200))        
-        category = db.Column(db.String(200))
-        buy_price = db.Column(db.Float, nullable=False)
-        sell_price = db.Column(db.Float, nullable=False)
-        stock_quantity = db.Column(db.Integer, nullable=False)
-        expiry_date = db.Column(db.Date)
-        created_at = db.Column(db.DateTime, default=datetime.utcnow)
-        updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-        
-        def __repr__(self):
-            return f'<Stock {self.name}>'
-        
-        def to_dict(self):
-            return {
-                'id': self.id,
-                'name': self.name,
-                'generic_name': self.generic_name, 
-                'manufacturer': self.manufacturer,               
-                'category': self.category,
-                'buy_price': self.buy_price,
-                'sell_price': self.sell_price,
-                'stock_quantity': self.stock_quantity,
-                'expiry_date': self.expiry_date.strftime('%Y-%m-%d'),
-                'profit_per_unit': round(self.sell_price - self.buy_price, 2),
-                'total_value': round(self.sell_price * self.stock_quantity, 2),
-                'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
-                'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S') if self.updated_at else None
-            }
-
-    # Initialize the app with extensions
-    db.init_app(app)
-
     def truncate_string(value, max_length):
         """Truncate string to specified max length"""
         if value and len(str(value)) > max_length:
             return str(value)[:max_length-3] + "..."
         return value
+
+    def parse_date(date_string):
+        """Safely parse date string to date object"""
+        if not date_string:
+            return None
+        try:
+            if isinstance(date_string, str):
+                # Handle different date formats
+                for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%Y-%m-%dT%H:%M:%S'):
+                    try:
+                        return datetime.strptime(date_string, fmt).date()
+                    except ValueError:
+                        continue
+            elif isinstance(date_string, datetime):
+                return date_string.date()
+            return date_string
+        except (ValueError, TypeError, AttributeError) as e:
+            print(f"Date parsing error: {e}")
+            return None
 
     @app.route('/')
     def index():
@@ -195,7 +163,6 @@ def create_app():
         
         return redirect('/dosage')
 
-    # Stock List View
     @app.route('/stock')
     def show_stock():
         try:
@@ -204,48 +171,80 @@ def create_app():
             search_query = request.args.get('search', '')
             
             # Base query
-            query = Stock.query
+            query = supabase.table('stocks').select('*')
             
-            # Apply filters
+            # Apply category filter
             if category_filter:
-                query = query.filter(Stock.category == category_filter)
+                query = query.eq('category', category_filter)
             
+            # Apply search filter
             if search_query:
-                query = query.filter(
-                    (Stock.name.ilike(f'%{search_query}%')) |
-                    (Stock.generic_name.ilike(f'%{search_query}%'))                    
-                )
+                search_pattern = f'%{search_query}%'
+                query = query.or_(f'name.ilike.{search_pattern},generic_name.ilike.{search_pattern}')
             
-            stocks = query.order_by(Stock.name).all()
-            manufacturer = db.session.query(Stock.manufacturer).distinct().all()
+            # Execute query
+            response = query.order('name').execute()
+            raw_stocks = response.data
             
-            # Get unique categories for filter dropdown
-            categories = db.session.query(Stock.category).distinct().all()
-            categories = [cat[0] for cat in categories if cat[0]]
+            # Process stocks data with proper date handling
+            processed_stocks = []
+            current_date = date.today()
             
-            # Calculate summary statistics
-            total_items = sum(stock.stock_quantity for stock in stocks)
-            total_value = sum(stock.sell_price * stock.stock_quantity for stock in stocks)
-            total_profit_potential = sum((stock.sell_price - stock.buy_price) * stock.stock_quantity for stock in stocks)
+            for stock in raw_stocks:
+                # Process expiry date - convert string to date object if needed
+                expiry_date = stock.get('expiry_date')
+                processed_expiry = None
+                days_left = None
+                
+                if expiry_date:
+                    processed_expiry = parse_date(expiry_date)
+                    if processed_expiry:
+                        days_left = (processed_expiry - current_date).days
+                
+                # Create a new stock dict with processed data
+                processed_stock = {
+                    'id': stock.get('id'),
+                    'name': stock.get('name'),
+                    'generic_name': stock.get('generic_name'),
+                    'category': stock.get('category'),
+                    'buy_price': float(stock.get('buy_price', 0)),
+                    'sell_price': float(stock.get('sell_price', 0)),
+                    'stock_quantity': stock.get('stock_quantity', 0),
+                    'expiry_date': processed_expiry,  # This is now a date object or None
+                    'days_until_expiry': days_left,   # Pre-calculated days until expiry
+                    'manufacturer': stock.get('manufacturer'),
+                    'batch_number': stock.get('batch_number')
+                }
+                processed_stocks.append(processed_stock)
+            
+            # Get unique categories from ALL stocks (not filtered)
+            all_categories = sorted(list({stock['category'] for stock in processed_stocks if stock.get('category')}))
+            
+            # Calculate totals
+            total_items = sum(stock.get('stock_quantity', 0) for stock in processed_stocks)
+            total_value = sum(stock.get('sell_price', 0) * stock.get('stock_quantity', 0) for stock in processed_stocks)
+            total_profit_potential = sum(
+                (stock.get('sell_price', 0) - stock.get('buy_price', 0)) * stock.get('stock_quantity', 0) 
+                for stock in processed_stocks
+            )
             
             return render_template('stock.html', 
-                                 stocks=stocks,
-                                 categories=categories,
-                                 manufacturer=manufacturer,
-                                 total_items=total_items,
-                                 total_value=round(total_value, 2),
-                                 total_profit_potential=round(total_profit_potential, 2),
-                                 now=datetime.now())
+                                   stocks=processed_stocks,
+                                   categories=all_categories,
+                                   total_items=total_items,
+                                   total_value=total_value,
+                                   total_profit_potential=total_profit_potential,
+                                   now=datetime.now())
+                                   
         except Exception as e:
-            flash(f'Error loading stock data: {str(e)}')
+            flash(f'Error loading stock data: {str(e)}', 'error')
             return render_template('stock.html', 
-                                 stocks=[],
-                                 categories=[],
-                                 manufacturer=[],
-                                 total_items=0,
-                                 total_value=0,
-                                 total_profit_potential=0,
-                                 now=datetime.now())
+                                   stocks=[],
+                                   categories=[],
+                                   total_items=0,
+                                   total_value=0,
+                                   total_profit_potential=0,
+                                   now=datetime.now())
 
     # Add New Stock
     @app.route('/stock/new', methods=['GET', 'POST'])
@@ -286,31 +285,35 @@ def create_app():
                         return render_template('edit_stock.html')
 
                 # Check if stock already exists
-                existing_stock = Stock.query.filter_by(name=name).first()
-                if existing_stock:
+                existing_response = supabase.table('stocks').select('*').eq('name', name).execute()
+                if existing_response.data:
                     flash(f'Stock item "{name}" already exists. Use edit instead.', 'error')
                     return render_template('edit_stock.html')
 
                 # Create new stock
-                stock = Stock(
-                    name=name,
-                    generic_name=generic_name,
-                    manufacturer=manufacturer,                    
-                    category=category,
-                    buy_price=buy_price,
-                    sell_price=sell_price,
-                    stock_quantity=stock_quantity,
-                    expiry_date=expiry_date
-                )
+                stock_data = {
+                    'name': name,
+                    'generic_name': generic_name,
+                    'manufacturer': manufacturer,                    
+                    'category': category,
+                    'buy_price': buy_price,
+                    'sell_price': sell_price,
+                    'stock_quantity': stock_quantity,
+                    'expiry_date': expiry_date.isoformat() if expiry_date else None,
+                    'created_at': datetime.now().isoformat(),
+                    'updated_at': datetime.now().isoformat()
+                }
                 
-                db.session.add(stock)
-                db.session.commit()
+                response = supabase.table('stocks').insert(stock_data).execute()
                 
-                flash(f'Stock item "{name}" added successfully!', 'success')
-                return redirect(url_for('show_stock'))
+                if response.data:
+                    flash(f'Stock item "{name}" added successfully!', 'success')
+                    return redirect(url_for('show_stock'))
+                else:
+                    flash('Failed to add stock item', 'error')
+                    return render_template('edit_stock.html')
 
             except Exception as e:
-                db.session.rollback()
                 flash(f'Error adding stock item: {str(e)}', 'error')
                 return render_template('edit_stock.html')
 
@@ -319,45 +322,64 @@ def create_app():
     # Edit Stock
     @app.route('/stock/<int:stock_id>/edit', methods=['GET', 'POST'])
     def edit_stock(stock_id):
-        stock = Stock.query.get_or_404(stock_id)
+        # Get existing stock data
+        response = supabase.table('stocks').select('*').eq('id', stock_id).execute()
+        if not response.data:
+            flash('Stock item not found', 'error')
+            return redirect(url_for('show_stock'))
+        
+        stock = response.data[0]
         
         if request.method == 'POST':
             try:
                 # Get form data
-                stock.name = request.form.get('name', '').strip()
-                stock.generic_name = request.form.get('generic_name', '').strip()                
-                stock.category = request.form.get('category', '').strip()
-                stoc.manufacturer = request.form.get('manufacturer', '').strip()
+                name = request.form.get('name', '').strip()
+                generic_name = request.form.get('generic_name', '').strip()                
+                category = request.form.get('category', '').strip()
+                manufacturer = request.form.get('manufacturer', '').strip()
                 
                 # Convert and validate numeric fields
                 try:
-                    stock.buy_price = float(request.form.get('buy_price', '0'))
-                    stock.sell_price = float(request.form.get('sell_price', '0'))
-                    stock.stock_quantity = int(request.form.get('stock_quantity', '0'))
+                    buy_price = float(request.form.get('buy_price', '0'))
+                    sell_price = float(request.form.get('sell_price', '0'))
+                    stock_quantity = int(request.form.get('stock_quantity', '0'))
                 except ValueError:
                     flash('Please enter valid numeric values for prices and quantity', 'error')
                     return render_template('edit_stock.html', stock=stock)
 
                 # Handle expiry date
                 expiry_date_str = request.form.get('expiry_date', '')
+                expiry_date = None
                 if expiry_date_str:
                     try:
-                        stock.expiry_date = datetime.strptime(expiry_date_str, '%Y-%m-%d').date()
+                        expiry_date = datetime.strptime(expiry_date_str, '%Y-%m-%d').date()
                     except ValueError:
                         flash('Please enter a valid date in YYYY-MM-DD format', 'error')
                         return render_template('edit_stock.html', stock=stock)
-                else:
-                    stock.expiry_date = None
 
-                stock.updated_at = datetime.utcnow()
+                # Update stock data
+                update_data = {
+                    'name': name,
+                    'generic_name': generic_name,
+                    'category': category,
+                    'manufacturer': manufacturer,
+                    'buy_price': buy_price,
+                    'sell_price': sell_price,
+                    'stock_quantity': stock_quantity,
+                    'expiry_date': expiry_date.isoformat() if expiry_date else None,
+                    'updated_at': datetime.now().isoformat()
+                }
                 
-                db.session.commit()
+                response = supabase.table('stocks').update(update_data).eq('id', stock_id).execute()
                 
-                flash(f'Stock item "{stock.name}" updated successfully!', 'success')
-                return redirect(url_for('show_stock'))
+                if response.data:
+                    flash(f'Stock item "{name}" updated successfully!', 'success')
+                    return redirect(url_for('show_stock'))
+                else:
+                    flash('Failed to update stock item', 'error')
+                    return render_template('edit_stock.html', stock=stock)
 
             except Exception as e:
-                db.session.rollback()
                 flash(f'Error updating stock item: {str(e)}', 'error')
                 return render_template('edit_stock.html', stock=stock)
 
@@ -367,15 +389,19 @@ def create_app():
     @app.route('/stock/<int:stock_id>/delete', methods=['POST'])
     def delete_stock(stock_id):
         try:
-            stock = Stock.query.get_or_404(stock_id)
-            stock_name = stock.name
+            # Get stock name for flash message
+            stock_response = supabase.table('stocks').select('name').eq('id', stock_id).execute()
+            stock_name = stock_response.data[0]['name'] if stock_response.data else 'Unknown'
             
-            db.session.delete(stock)
-            db.session.commit()
+            # Delete stock
+            response = supabase.table('stocks').delete().eq('id', stock_id).execute()
             
-            flash(f'Stock item "{stock_name}" deleted successfully!', 'success')
+            if response.data:
+                flash(f'Stock item "{stock_name}" deleted successfully!', 'success')
+            else:
+                flash('Failed to delete stock item', 'error')
+                
         except Exception as e:
-            db.session.rollback()
             flash(f'Error deleting stock item: {str(e)}', 'error')
         
         return redirect(url_for('show_stock'))
@@ -384,10 +410,13 @@ def create_app():
     @app.route('/stock/<int:stock_id>')
     def get_stock(stock_id):
         try:
-            stock = Stock.query.get_or_404(stock_id)
-            return jsonify(stock.to_dict())
+            response = supabase.table('stocks').select('*').eq('id', stock_id).execute()
+            if response.data:
+                return jsonify(response.data[0])
+            else:
+                return jsonify({'error': 'Stock not found'}), 404
         except Exception as e:
-            return jsonify({'error': str(e)}), 404
+            return jsonify({'error': str(e)}), 500
 
     # Bulk Update Stock Quantities
     @app.route('/stock/bulk-update', methods=['POST'])
@@ -395,18 +424,17 @@ def create_app():
         try:
             updates = request.get_json()
             for update in updates:
-                stock = Stock.query.get(update['id'])
-                if stock:
-                    stock.stock_quantity = update['quantity']
-                    stock.updated_at = datetime.utcnow()
+                update_data = {
+                    'stock_quantity': update['quantity'],
+                    'updated_at': datetime.now().isoformat()
+                }
+                supabase.table('stocks').update(update_data).eq('id', update['id']).execute()
             
-            db.session.commit()
             return jsonify({'success': True, 'message': 'Stock quantities updated successfully'})
         except Exception as e:
-            db.session.rollback()
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    # Existing routes (upload, clear-stock, etc.)
+    # Upload Excel file
     @app.route('/upload', methods=['GET', 'POST'])
     def upload_file():
         if request.method == 'POST':
@@ -481,38 +509,41 @@ def create_app():
                                 continue
                             
                             # Check if stock already exists
-                            existing_stock = Stock.query.filter_by(name=name).first()
-                            if existing_stock:
+                            existing_response = supabase.table('stocks').select('*').eq('name', name).execute()
+                            if existing_response.data:
                                 # Update existing stock
-                                existing_stock.generic_name = generic_name 
-                                existing_stock.manufacturer = manufacturer                               
-                                existing_stock.category = category
-                                existing_stock.buy_price = buy_price
-                                existing_stock.sell_price = sell_price
-                                existing_stock.stock_quantity = stock_quantity
-                                existing_stock.expiry_date = expiry_date
-                                existing_stock.updated_at = datetime.utcnow()
+                                update_data = {
+                                    'generic_name': generic_name,
+                                    'manufacturer': manufacturer,                               
+                                    'category': category,
+                                    'buy_price': buy_price,
+                                    'sell_price': sell_price,
+                                    'stock_quantity': stock_quantity,
+                                    'expiry_date': expiry_date.isoformat() if expiry_date else None,
+                                    'updated_at': datetime.now().isoformat()
+                                }
+                                supabase.table('stocks').update(update_data).eq('name', name).execute()
                                 stocks_updated += 1
                             else:
                                 # Create new stock
-                                stock = Stock(
-                                    name=name,
-                                    generic_name=generic_name, 
-                                    manufacturer=manufacturer,                                   
-                                    category=category,
-                                    buy_price=buy_price,
-                                    sell_price=sell_price,
-                                    stock_quantity=stock_quantity,
-                                    expiry_date=expiry_date
-                                )
-                                db.session.add(stock)
+                                stock_data = {
+                                    'name': name,
+                                    'generic_name': generic_name,
+                                    'manufacturer': manufacturer,                                   
+                                    'category': category,
+                                    'buy_price': buy_price,
+                                    'sell_price': sell_price,
+                                    'stock_quantity': stock_quantity,
+                                    'expiry_date': expiry_date.isoformat() if expiry_date else None,
+                                    'created_at': datetime.now().isoformat(),
+                                    'updated_at': datetime.now().isoformat()
+                                }
+                                supabase.table('stocks').insert(stock_data).execute()
                                 stocks_added += 1
                                 
                         except Exception as e:
                             errors.append(f"Row {index+2}: {str(e)}")
                             continue
-                    
-                    db.session.commit()
                     
                     # Show success message with any errors
                     if stocks_updated > 0 and stocks_added > 0:
@@ -531,7 +562,6 @@ def create_app():
                         flash(error_msg, 'warning')
                     
                 except Exception as e:
-                    db.session.rollback()
                     flash(f'Error importing file: {str(e)}')
                 
                 return redirect(url_for('show_stock'))
@@ -544,11 +574,10 @@ def create_app():
     def clear_stock():
         try:
             # Delete all stock records
-            num_deleted = Stock.query.delete()
-            db.session.commit()
+            response = supabase.table('stocks').delete().neq('id', 0).execute()
+            num_deleted = len(response.data) if response.data else 0
             flash(f'Successfully cleared {num_deleted} stock items from database')
         except Exception as e:
-            db.session.rollback()
             flash(f'Error clearing stock: {str(e)}')
         
         return redirect(url_for('show_stock'))
@@ -557,20 +586,21 @@ def create_app():
     def export_excel():
         try:
             # Get all stock data
-            stocks = Stock.query.order_by(Stock.name).all()
+            response = supabase.table('stocks').select('*').order('name').execute()
+            stocks = response.data
             
             # Create a DataFrame from the stock data
             data = []
             for stock in stocks:
                 data.append({                    
-                    'name': stock.name,
-                    'generic_name': stock.generic_name,
-                    'manufacturer': stock.manufacturer,
-                    'category': stock.category,
-                    'buy_price': stock.buy_price,
-                    'sell_price': stock.sell_price,
-                    'stock_quantity': stock.stock_quantity,
-                    'expiry_date': stock.expiry_date.strftime('%m/%d/%Y') if stock.expiry_date else '',                    
+                    'name': stock.get('name'),
+                    'generic_name': stock.get('generic_name'),
+                    'manufacturer': stock.get('manufacturer'),
+                    'category': stock.get('category'),
+                    'buy_price': stock.get('buy_price'),
+                    'sell_price': stock.get('sell_price'),
+                    'stock_quantity': stock.get('stock_quantity'),
+                    'expiry_date': stock.get('expiry_date', ''),
                 })
             
             df = pd.DataFrame(data)
@@ -596,8 +626,6 @@ def create_app():
                             pass
                     adjusted_width = min(max_length + 2, 50)
                     worksheet.column_dimensions[column_letter].width = adjusted_width
-                
-                
             
             # Prepare response
             output.seek(0)
@@ -615,17 +643,6 @@ def create_app():
             flash(f'Error exporting Excel file: {str(e)}', 'error')
             return redirect(url_for('show_stock'))
 
-    @app.route('/init-db')
-    def init_db():
-        """Manual route to initialize database"""
-        try:
-            with app.app_context():
-                db.create_all()
-            flash('Database initialized successfully!')
-        except Exception as e:
-            flash(f'Error initializing database: {str(e)}')
-        return redirect(url_for('show_stock'))
-
     def allowed_file(filename):
         return '.' in filename and \
                filename.rsplit('.', 1)[1].lower() in {'xlsx', 'xls'}
@@ -634,16 +651,6 @@ def create_app():
 
 # Create app instance
 app = create_app()
-
-# Initialize database when app starts
-with app.app_context():
-    try:
-        from flask_sqlalchemy import SQLAlchemy
-        db = SQLAlchemy(app)
-        db.create_all()
-        print("✅ Database tables created successfully!")
-    except Exception as e:
-        print(f"❌ Error creating tables: {e}")
 
 if __name__ == '__main__':
     app.run(debug=True)
