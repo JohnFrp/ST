@@ -44,6 +44,71 @@ def create_app():
             print(f"Date parsing error: {e}")
             return None
 
+    def get_all_categories():
+        response = supabase.table('categories').select('*').execute()
+        return response.data
+
+    def get_category_by_id(category_id):
+        response = supabase.table('categories').select('*').eq('category_id', category_id).execute()
+        return response.data[0] if response.data else None
+
+    def get_all_drugs():
+        response = supabase.table('generic_drugs').select('*').execute()
+        return response.data
+
+    def get_drugs_by_category(category_id):
+        response = supabase.table('generic_drugs').select('*').eq('category_id', category_id).execute()
+        return response.data
+
+    def get_drug_by_id(generic_id):
+        response = supabase.table('generic_drugs').select('*').eq('generic_id', generic_id).execute()
+        return response.data[0] if response.data else None
+
+    def get_indications_for_drug(generic_id):
+        response = supabase.table('indications').select('*').eq('generic_id', generic_id).execute()
+        return response.data
+
+    def get_brand_names_for_drug(generic_id):
+        response = supabase.table('brand_names').select('*').eq('generic_id', generic_id).execute()
+        return response.data
+
+    def get_side_effects_for_drug(generic_id):
+        response = supabase.table('side_effects').select('*').eq('generic_id', generic_id).execute()
+        return response.data
+
+    def search_drugs_by_name(query):
+        response = supabase.table('generic_drugs').select('*, categories(category_name)').ilike('generic_name', f'%{query}%').execute()
+        return response.data
+
+    def insert_category(category_name):
+        response = supabase.table('categories').insert({'category_name': category_name}).execute()
+        return response.data[0] if response.data else None
+
+    def insert_generic_drug(category_id, generic_name):
+        response = supabase.table('generic_drugs').insert({
+            'category_id': category_id,
+            'generic_name': generic_name
+        }).execute()
+        return response.data[0] if response.data else None
+
+    def insert_indication(generic_id, indication_name):
+        supabase.table('indications').insert({
+            'generic_id': generic_id,
+            'indication_name': indication_name
+        }).execute()
+
+    def insert_brand_name(generic_id, brand_name):
+        supabase.table('brand_names').insert({
+            'generic_id': generic_id,
+            'brand_name': brand_name
+        }).execute()
+
+    def insert_side_effect(generic_id, side_effect_name):
+        supabase.table('side_effects').insert({
+            'generic_id': generic_id,
+            'side_effect_name': side_effect_name
+        }).execute()
+
     @app.route('/')
     def index():
         return redirect(url_for('show_stock'))
@@ -595,6 +660,108 @@ def create_app():
         
         return redirect(url_for('show_stock'))
 
+
+
+
+
+    @app.route('/drugs')
+    def drugs_form():
+        categories = get_all_categories()
+        
+        # Get all drugs and count by category
+        all_drugs = get_all_drugs()
+        drug_counts = {}
+        for drug in all_drugs:
+            category_id = drug['category_id']
+            drug_counts[category_id] = drug_counts.get(category_id, 0) + 1
+        
+        # Add drug count to each category
+        for category in categories:
+            category['drug_count'] = drug_counts.get(category['category_id'], 0)
+        
+        return render_template('drugs.html', categories=categories)
+
+    @app.route('/category/<int:category_id>')
+    def category_drugs(category_id):
+        category = get_category_by_id(category_id)
+        if not category:
+            return "Category not found", 404
+        
+        generic_drugs = get_drugs_by_category(category_id)
+        # Add additional data to each drug
+        for drug in generic_drugs:
+            drug['brand_names'] = get_brand_names_for_drug(drug['generic_id'])
+            drug['indications'] = get_indications_for_drug(drug['generic_id'])
+            drug['side_effects'] = get_side_effects_for_drug(drug['generic_id'])
+        
+        return render_template('category.html', category=category, generic_drugs=generic_drugs)
+
+    @app.route('/drug/<int:generic_id>')
+    def drug_details(generic_id):
+        drug = get_drug_by_id(generic_id)
+        if not drug:
+            return "Drug not found", 404
+        
+        # Get related data
+        drug['indications'] = get_indications_for_drug(generic_id)
+        drug['brand_names'] = get_brand_names_for_drug(generic_id)
+        drug['side_effects'] = get_side_effects_for_drug(generic_id)
+        drug['category'] = get_category_by_id(drug['category_id'])
+        
+        return render_template('drug_details.html', drug=drug)
+
+    @app.route('/api/drugs/search')
+    def search_drugs():
+        query = request.args.get('q', '')
+        if query:
+            drugs = search_drugs_by_name(query)
+            results = [{
+                'generic_id': drug['generic_id'],
+                'generic_name': drug['generic_name'],
+                'category_name': drug['categories']['category_name'] if drug.get('categories') else 'Unknown'
+            } for drug in drugs]
+            return jsonify(results)
+        return jsonify([])
+
+    @app.route('/add_drug', methods=['GET', 'POST'])
+    def add_drug():
+        if request.method == 'POST':
+            category_name = request.form.get('category_name')
+            generic_name = request.form.get('generic_name')
+            indications = request.form.get('indications', '').split(',')
+            brand_names = request.form.get('brand_names', '').split(',')
+            side_effects = request.form.get('side_effects', '').split(',')
+
+            # Find or create category
+            categories = supabase.table('categories').select('*').eq('category_name', category_name).execute()
+            if categories.data:
+                category = categories.data[0]
+            else:
+                category = insert_category(category_name)
+
+            # Create generic drug
+            drug = insert_generic_drug(category['category_id'], generic_name)
+
+            # Add indications
+            for indication in indications:
+                if indication.strip():
+                    insert_indication(drug['generic_id'], indication.strip())
+
+            # Add brand names
+            for brand in brand_names:
+                if brand.strip():
+                    insert_brand_name(drug['generic_id'], brand.strip())
+
+            # Add side effects
+            for side_effect in side_effects:
+                if side_effect.strip():
+                    insert_side_effect(drug['generic_id'], side_effect.strip())
+
+            return redirect(url_for('drug_details', generic_id=drug['generic_id']))
+
+        return render_template('add_drug.html')
+
+
     @app.route('/export')
     def export_excel():
         try:
@@ -661,6 +828,9 @@ def create_app():
                filename.rsplit('.', 1)[1].lower() in {'xlsx', 'xls'}
 
     return app
+
+
+    
 
 # Create app instance
 app = create_app()

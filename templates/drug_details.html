@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1>{{ drug.generic_name }}</h1>
+        <p class="lead">Category: {{ drug.category.category_name }}</p>
+        
+        <div class="row mt-4">
+            <!-- Indications -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">Indications</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if drug.indications %}
+                        <ul class="list-group list-group-flush">
+                            {% for indication in drug.indications %}
+                            <li class="list-group-item">{{ indication.indication_name }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p class="text-muted">No indications listed</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Brand Names -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Brand Names</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if drug.brand_names %}
+                        <ul class="list-group list-group-flush">
+                            {% for brand in drug.brand_names %}
+                            <li class="list-group-item">{{ brand.brand_name }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p class="text-muted">No brand names listed</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Side Effects -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">Side Effects</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if drug.side_effects %}
+                        <ul class="list-group list-group-flush">
+                            {% for side_effect in drug.side_effects %}
+                            <li class="list-group-item">{{ side_effect.side_effect_name }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p class="text-muted">No side effects listed</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-4">
+            <a href="{{ url_for('category_drugs', category_id=drug.category_id) }}" 
+               class="btn btn-secondary">Back to Category</a>
+            <a href="{{ url_for('drugs_form') }}" class="btn btn-outline-secondary">Drugs Form</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

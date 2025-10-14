@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1>{{ category.category_name }}</h1>
+        <p class="lead">Generic drugs in this category</p>
+        
+        <div class="row">
+            {% for drug in generic_drugs %}
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card drug-card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ drug.generic_name }}</h5>
+                        <p class="card-text">
+                            <small class="text-muted">
+                                {{ drug.brand_names|length }} Brands<br>
+                                {{ drug.indications|length }} Indications
+                                <br>
+                                {{ drug.side_effects|length }} Side Effects
+                            </small>
+                        </p>
+                        <a href="{{ url_for('drug_details', generic_id=drug.generic_id) }}" 
+                           class="btn btn-outline-primary btn-sm">View Details</a>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="col-12">
+                <div class="alert alert-info">No drugs found in this category.</div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <a href="{{ url_for('drugs_form') }}" class="btn btn-secondary">Back to Categories</a>
+    </div>
+</div>
+{% endblock %}

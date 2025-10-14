@@ -205,12 +205,17 @@
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
                         <a class="nav-link active" href="{{ url_for('dosage_form') }}">
-                            <i class="fas fa-boxes me-1"></i>Dosage Form
+                            <i class="fa-solid fa-book me-1"></i>Dosage Form
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="{{ url_for('drugs_form') }}">
+                            <i class="fa-solid fa-book-skull me-1"></i>Drugs Form
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link active" href="{{ url_for('show_stock') }}">
-                            <i class="fas fa-boxes me-1"></i>Stock View
+                            <i class="fa-brands fa-servicestack me-1"></i>Stock View
                         </a>
                     </li>
                     <li class="nav-item">
@@ -220,7 +225,7 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('export_excel') }}">
-                            <i class="fas fa-file-import me-1"></i>Export Excel
+                            <i class="fa-solid fa-upload me-1"></i>Export Excel
                         </a>
                     </li>
                 </ul>

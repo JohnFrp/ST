@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <h1>Add New Drug</h1>
+        
+        <form method="POST">
+            <div class="mb-3">
+                <label for="category_name" class="form-label">Category Name</label>
+                <input type="text" class="form-control" id="category_name" name="category_name" required>
+                <div class="form-text">Enter existing category or create new one</div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="generic_name" class="form-label">Generic Drug Name</label>
+                <input type="text" class="form-control" id="generic_name" name="generic_name" required>
+            </div>
+            
+            <div class="mb-3">
+                <label for="indications" class="form-label">Indications (comma separated)</label>
+                <textarea class="form-control" id="indications" name="indications" rows="3"></textarea>
+            </div>
+            
+            <div class="mb-3">
+                <label for="brand_names" class="form-label">Brand Names (comma separated)</label>
+                <textarea class="form-control" id="brand_names" name="brand_names" rows="3"></textarea>
+            </div>
+            
+            <div class="mb-3">
+                <label for="side_effects" class="form-label">Side Effects (comma separated)</label>
+                <textarea class="form-control" id="side_effects" name="side_effects" rows="3"></textarea>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Add Drug</button>
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}
