@@ -1,38 +1,119 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <h1>{{ category.category_name }}</h1>
-        <p class="lead">Generic drugs in this category</p>
-        
-        <div class="row">
-            {% for drug in generic_drugs %}
-            <div class="col-md-6 col-lg-4 mb-4">
-                <div class="card drug-card h-100">
-                    <div class="card-body">
-                        <h5 class="card-title">{{ drug.generic_name }}</h5>
-                        <p class="card-text">
-                            <small class="text-muted">
-                                {{ drug.brand_names|length }} Brands<br>
-                                {{ drug.indications|length }} Indications
-                                <br>
-                                {{ drug.side_effects|length }} Side Effects
-                            </small>
-                        </p>
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="page-header d-flex align-items-center justify-content-between mb-4">
+                <div>
+                    <h1 class="display-5 fw-bold text-primary mb-2">{{ category.category_name }}</h1>
+                    <p class="lead text-muted">Explore generic drugs in this therapeutic category</p>
+                </div>
+                <a href="{{ url_for('drugs_form') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Drug Types
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Drug Cards -->
+    <div class="row">
+        {% for drug in generic_drugs %}
+        <div class="col-xl-4 col-lg-6 col-md-6 mb-4">
+            <div class="card drug-card h-100 border-0 shadow-sm position-relative overflow-hidden">
+                <div class="card-body p-4 d-flex flex-column">
+                    <!-- Drug Name -->
+                    <h5 class="card-title mb-3 fw-bold text-primary">{{ drug.generic_name }}</h5>
+                    
+                    <!-- Drug Stats -->
+                    <div class="drug-stats mb-4">
+                        <div class="row g-3">
+                            <div class="col-4">
+                                <div class="stat-item text-center">
+                                    <div class="stat-number text-info fw-bold">{{ drug.brand_names|length }}</div>
+                                    <div class="stat-label small text-muted">Brands</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="stat-item text-center">
+                                    <div class="stat-number text-success fw-bold">{{ drug.indications|length }}</div>
+                                    <div class="stat-label small text-muted">Indications</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="stat-item text-center">
+                                    <div class="stat-number text-warning fw-bold">{{ drug.side_effects|length }}</div>
+                                    <div class="stat-label small text-muted">Side Effects</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Action Button -->
+                    <div class="mt-auto">
                         <a href="{{ url_for('drug_details', generic_id=drug.generic_id) }}" 
-                           class="btn btn-outline-primary btn-sm">View Details</a>
+                           class="btn btn-primary w-100 d-flex align-items-center justify-content-center">
+                            <i class="bi bi-info-circle me-2"></i>View Details
+                        </a>
                     </div>
                 </div>
+                
             </div>
-            {% else %}
-            <div class="col-12">
-                <div class="alert alert-info">No drugs found in this category.</div>
-            </div>
-            {% endfor %}
         </div>
-        
-        <a href="{{ url_for('drugs_form') }}" class="btn btn-secondary">Back to Categories</a>
+        {% else %}
+        <div class="col-12">
+            <div class="empty-state text-center py-5">
+                <div class="empty-icon mb-4">
+                    <i class="bi bi-capsule display-1 text-muted"></i>
+                </div>
+                <h3 class="text-muted">No drugs found</h3>
+                <p class="text-muted mb-4">There are currently no drugs in this category.</p>
+                <a href="{{ url_for('drugs_form') }}" class="btn btn-outline-primary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Categories
+                </a>
+            </div>
+        </div>
+        {% endfor %}
     </div>
 </div>
+
+<style>
+.drug-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border-radius: 12px;
+}
+
+.drug-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
+}
+
+.stat-number {
+    font-size: 1.5rem;
+    line-height: 1.2;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.page-header {
+    border-bottom: 1px solid #eaeaea;
+    padding-bottom: 1.5rem;
+}
+
+.empty-state {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+
+.card-body {
+    z-index: 1;
+    position: relative;
+}
+</style>
 {% endblock %}
