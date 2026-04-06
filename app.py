@@ -235,21 +235,50 @@ def create_app():
             category_filter = request.args.get('category', '')
             search_query = request.args.get('search', '')
             
-            # Base query
-            query = supabase.table('stocks').select('*')
+            # FIRST: Get the total count to understand what we're dealing with
+            count_query = supabase.table('stocks').select('*', count='exact')
             
-            # Apply category filter
             if category_filter:
-                query = query.eq('category', category_filter)
+                count_query = count_query.eq('category', category_filter)
             
-            # Apply search filter
             if search_query:
                 search_pattern = f'%{search_query}%'
-                query = query.or_(f'name.ilike.{search_pattern},generic_name.ilike.{search_pattern}')
+                count_query = count_query.or_(f'name.ilike.{search_pattern},generic_name.ilike.{search_pattern}')
             
-            # Execute query
-            response = query.order('name').execute()
-            raw_stocks = response.data
+            count_response = count_query.execute()
+            total_available = count_response.count
+            print(f"Total records matching filters: {total_available}")
+            
+            # SECOND: Get ALL records using pagination
+            all_stocks = []
+            page_size = 1000
+            offset = 0
+            
+            while offset < total_available:
+                # Build the query for this page
+                query = supabase.table('stocks').select('*')
+                
+                if category_filter:
+                    query = query.eq('category', category_filter)
+                
+                if search_query:
+                    search_pattern = f'%{search_query}%'
+                    query = query.or_(f'name.ilike.{search_pattern},generic_name.ilike.{search_pattern}')
+                
+                # Use range to get specific page
+                query = query.order('name').range(offset, offset + page_size - 1)
+                
+                response = query.execute()
+                
+                if response.data:
+                    all_stocks.extend(response.data)
+                    print(f"Fetched {len(response.data)} records (offset {offset})")
+                    offset += page_size
+                else:
+                    break
+            
+            raw_stocks = all_stocks
+            print(f"Total records retrieved: {len(raw_stocks)}")
             
             # Process stocks data with proper date handling
             processed_stocks = []
@@ -302,6 +331,7 @@ def create_app():
                                    now=datetime.now())
                                    
         except Exception as e:
+            print(f"Error in show_stock: {str(e)}")
             flash(f'Error loading stock data: {str(e)}', 'error')
             return render_template('stock.html', 
                                    stocks=[],
@@ -310,6 +340,7 @@ def create_app():
                                    total_value=0,
                                    total_profit_potential=0,
                                    now=datetime.now())
+
 
     # Add New Stock
     @app.route('/stock/new', methods=['GET', 'POST'])
